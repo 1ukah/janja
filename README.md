@@ -16,7 +16,7 @@ Este guia explica o passo a passo para contornar o bloqueio no Discord e restaur
 O Discord valida a localização apenas durante a inicialização e autenticação com a API.
 
 1. Um servidor próprio nos EUA atua como intermediário exclusivamente no momento em que o Discord abre.
-2. Após a validação da sessão, todo o tráfego pesado (como voz, vídeo e jogos) flui diretamente pela sua conexão de internet padrão, sem latência adicional.
+2. Após a validação da sessão, todo o tráfego flui diretamente pela sua conexão de internet padrão, sem latência adicional.
 
 ---
 
