@@ -2,6 +2,9 @@
   <img src="janja.png" alt="JANJA VAI TOMA NO CU">
 </p>
 
+> [!WARNING]
+> Depois de usar o proxy, o compartilhamento de tela volta a funcionar **para você**. Quem não estiver usando o proxy continuará bloqueado — isso não é uma falha deste workaround, e sim do bloqueio do Discord. Seus amigos também precisam usar o proxy. Se não se importar em compartilhar o IP da sua instância EC2, basta enviar o `.bat` ou o `.sh` já configurado.
+
 # Desbloquear Compartilhamento de Tela do Discord após bloqueio da "Janja"
 
 Este guia explica o passo a passo para contornar o bloqueio no Discord e restaurar o compartilhamento de tela criando um proxy próprio nos Estados Unidos. O objetivo é recuperar o acesso completo à transmissão sem depender de serviços pagos, sem instalar programas invasivos e sem comprometer a velocidade da conexão local.
