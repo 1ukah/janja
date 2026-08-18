@@ -22,7 +22,7 @@ O Discord valida a localização apenas durante a inicialização e autenticaç�
 Esta etapa precisa ser realizada apenas uma vez. O servidor ficará ativo continuamente.
 
 ### Criação da Máquina Virtual
-1. Acesse o [Console da AWS](https://console.aws.amazon.com/) e faça login na sua conta.
+1. Acesse o [Console da AWS](https://console.aws.amazon.com/) e faça login ou crie sua conta.
 2. Na barra de busca superior, pesquise por **EC2** e acesse o serviço.
 3. No canto superior direito (ao lado do seu nome de usuário), selecione a região **US East (N. Virginia) `us-east-1`** (ou outra região dos EUA).
 4. Clique no botão laranja **Launch instance**.
