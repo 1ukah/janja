@@ -34,16 +34,16 @@ Fluxo:
 discord.bat / discord_macos.sh / discord_linux.sh
                     |
                     v
-              AWS Lambda
+               AWS Lambda
                     |
                     v
-        Autoriza IP atual
+            Autoriza IP atual
                     |
                     v
-              EC2 Security Group
+            EC2 Security Group
                     |
                     v
-             SOCKS5 :1080
+              SOCKS5 :1080
                     |
                     v
                  Discord
