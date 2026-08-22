@@ -1,11 +1,27 @@
 #!/usr/bin/env bash
 
 # ==========================================
-# CONFIGURAÇÃO: Insira o IP da sua AWS aqui
+# CONFIGURAÇÃO
 # ==========================================
 PROXY_HOST="<SEU_IP_DO_SERVIDOR>"
 PROXY_PORT="1080"
+AUTH_URL="<SUA_LAMBDA_FUNCTION_URL>"
+AUTH_TOKEN="<SEU_TOKEN>"
 # ==========================================
+
+if ! command -v curl &> /dev/null; then
+    echo "[ERRO] curl não encontrado no sistema."
+    exit 1
+fi
+
+if ! curl -4 -fsS -X POST \
+    -H "Authorization: Bearer ${AUTH_TOKEN}" \
+    "${AUTH_URL}" >/dev/null; then
+    echo "[ERRO] Não foi possível autorizar este IP na AWS."
+    exit 1
+fi
+
+sleep 1
 
 killall -9 discord 2>/dev/null
 pkill -f "Discord" 2>/dev/null

@@ -3,171 +3,422 @@
 </p>
 
 > [!WARNING]
-> Depois de usar o proxy, o compartilhamento de tela volta a funcionar **para você**. Quem não estiver usando o proxy continuará bloqueado — isso não é uma falha deste workaround, e sim do bloqueio do Discord. Seus amigos também precisam usar o proxy. Se não se importar em compartilhar o IP da sua instância EC2, basta enviar o `.bat` ou o `.sh` já configurado.
+> Depois de usar o proxy, o compartilhamento de tela volta a funcionar **para você**. Quem não estiver usando o proxy continuará bloqueado — isso não é uma falha deste workaround, e sim do bloqueio do Discord. Seus amigos também precisam usar o proxy.
+>
+> Você pode enviar o `.bat` ou o `.sh` já configurado para os amigos usarem também.
+
+> [!IMPORTANT]
+> O proxy não deve ficar aberto para `0.0.0.0/0`. Este guia utiliza uma AWS Lambda para autorizar automaticamente apenas o IP atual de cada usuário antes de iniciar o Discord.
+>
+> Não usamos um open proxy aberto sem autenticação, porque a ToS não permite.
 
 # Desbloquear Compartilhamento de Tela do Discord após bloqueio da "Janja"
 
-Este guia explica o passo a passo para contornar o bloqueio no Discord e restaurar o compartilhamento de tela criando um proxy próprio nos Estados Unidos. O objetivo é recuperar o acesso completo à transmissão sem depender de serviços pagos, sem instalar programas invasivos e sem comprometer a velocidade da conexão local.
+Este guia explica como restaurar o compartilhamento de tela do Discord utilizando uma instância EC2 nos Estados Unidos como proxy SOCKS5.
+
+O IP atual do usuário é autorizado automaticamente no Security Group da AWS antes do Discord iniciar.
 
 ---
 
 ## Como o Sistema Funciona
 
-O Discord valida a localização apenas durante a inicialização e autenticação com a API.
+1. O script chama uma AWS Lambda antes de iniciar o Discord.
+2. A Lambda identifica o IP público de quem fez a chamada.
+3. A Lambda adiciona temporariamente esse IP ao Security Group da EC2.
+4. O Discord inicia utilizando a EC2 como proxy SOCKS5.
+5. Qualquer IP que não estiver autorizado pelo Security Group não consegue acessar o proxy.
 
-1. Um servidor próprio nos EUA atua como intermediário exclusivamente no momento em que o Discord abre.
-2. Após a validação da sessão, todo o tráfego flui diretamente pela sua conexão de internet padrão, sem latência adicional.
+Fluxo:
 
----
-
-## 1. Configuração do Servidor Próprio (AWS Free Tier)
-
-Esta etapa precisa ser realizada apenas uma vez. O servidor ficará ativo continuamente.
-
-### Criação da Máquina Virtual
-1. Acesse o [Console da AWS](https://console.aws.amazon.com/) e faça login ou crie sua conta.
-2. Na barra de busca superior, pesquise por **EC2** e acesse o serviço.
-3. No canto superior direito (ao lado do seu nome de usuário), selecione a região **US East (N. Virginia) `us-east-1`** (ou outra região dos EUA).
-4. Clique no botão laranja **Launch instance**.
-5. Preencha os campos:
-   - **Name:** `discord-proxy`
-   - **Application and OS Images (AMI):** `Amazon Linux 2023` (verifique a etiqueta `Free tier eligible`).
-   - **Instance type:** `t2.micro` ou `t3.micro` (`Free tier eligible`).
-   - **Key pair (login):** Selecione `Proceed without a key pair (Not recommended)`.
-
-### Abertura de Porta no Firewall
-Na seção **Network settings**:
-1. Marque a opção **Allow SSH traffic from Anywhere**.
-2. Clique no botão **Edit**.
-3. Em **Inbound security groups rules**, clique em **Add security group rule**:
-   - **Type:** `Custom TCP`
-   - **Port range:** `1080`
-   - **Source type:** `Anywhere` (`0.0.0.0/0`)
-4. Clique no botão laranja **Launch instance**.
-
-### Inicialização do Serviço de Proxy
-1. Na lista de **Instances**, selecione a máquina criada e clique no botão **Connect** (no topo) -> aba **EC2 Instance Connect** -> botão **Connect** (abrirá o terminal no navegador).
-2. No terminal, execute o comando abaixo:
-
-```bash
-sudo dnf update -y && sudo dnf install docker -y
-sudo systemctl enable --now docker
-sudo docker run -d --name socks5-proxy --restart always -p 1080:1080 -e SOCKS5_USER="" -e SOCKS5_PASS="" -e SOCKS5_PORT=1080 xkuma/socks5
+```text
+discord.bat / discord_macos.sh / discord_linux.sh
+                    |
+                    v
+              AWS Lambda
+                    |
+                    v
+        Autoriza IP atual
+                    |
+                    v
+              EC2 Security Group
+                    |
+                    v
+             SOCKS5 :1080
+                    |
+                    v
+                 Discord
 ```
 
-3. Confirme que o serviço está ativo executando `sudo docker ps`.
-4. Copie o **Public IPv4 address** da instância exibido no painel da AWS.
+---
+
+# 1. Criação da EC2
+
+Acesse o [Console da AWS](https://console.aws.amazon.com/) e abra o serviço **EC2**.
+
+Clique em **Launch instance**.
+
+Configure:
+
+- **Name:** `discord-proxy`
+- **AMI:** Amazon Linux 2023
+- **Instance type:** `t2.micro` ou `t3.micro`, conforme disponibilidade do Free Tier
+- **Key pair:** crie uma nova key pair
+  - Tipo: `ED25519`
+  - Formato: `.pem`
+
+Guarde o arquivo `.pem`. Ele será utilizado somente para administrar a EC2.
 
 ---
 
-## 2. Inicialização do Discord
+## Network Settings
 
-Use o script correspondente ao sistema operacional. Basta substituir o IP no campo de configuração.
+No Security Group, inicialmente deixe apenas:
+
+```text
+SSH
+TCP 22
+Source: My IP
+```
+
+As portas do proxy serão liberadas automaticamente somente para os IPs autorizados.
 
 ---
 
-### Windows (`discord.bat`)
+# 2. Conectar na EC2
 
-Edite o `discord.bat` e substitua o IP:
+No Windows PowerShell:
+
+```powershell
+ssh -i .\key.pem ec2-user@<IP_PUBLICO_DA_EC2>
+```
+
+No macOS/Linux:
+
+```bash
+ssh -i ./key.pem ec2-user@<IP_PUBLICO_DA_EC2>
+```
+
+---
+
+# 3. Instalar Docker
+
+Dentro da EC2:
+
+```bash
+sudo dnf update -y
+sudo dnf install docker -y
+sudo systemctl enable --now docker
+```
+
+Confirme:
+
+```bash
+sudo docker ps
+```
+
+---
+
+# 4. Iniciar o Proxy SOCKS5
+
+Execute:
+
+```bash
+sudo docker run -d \
+  --name socks5-proxy \
+  --restart always \
+  -p 1080:1080 \
+  -p 443:1080 \
+  -e SOCKS5_USER="" \
+  -e SOCKS5_PASS="" \
+  -e SOCKS5_PORT=1080 \
+  xkuma/socks5
+```
+
+Confirme:
+
+```bash
+sudo docker ps
+```
+
+Você deve ver algo semelhante:
+
+```text
+0.0.0.0:1080->1080/tcp
+0.0.0.0:443->1080/tcp
+```
+
+Isso significa apenas que o Docker está escutando nessas portas.
+
+---
+
+# 5. Criar a Lambda
+
+No AWS Console:
+
+**Lambda -> Create function**
+
+Configure:
+
+```text
+Function name: janja-authorize
+Runtime: Python 3.13
+Architecture: x86_64
+```
+
+Clique em **Create function**.
+
+---
+
+## Environment Variables
+
+Abra:
+
+**Configuration -> Environment variables**
+
+Adicione:
+
+```text
+SG_ID=<ID_DO_SECURITY_GROUP_DA_EC2>
+TOKEN=<SEU_TOKEN_SECRETO>
+```
+
+O `SG_ID` é o ID do Security Group da EC2. Para encontrar:
+
+**EC2 -> Instances**
+
+Selecione a instância `discord-proxy`.
+
+Abra:
+
+**Security -> Security groups**
+
+Clique no Security Group e copie o **Security group ID**. Ele começa com `sg-`.
+
+Exemplo:
+
+```text
+sg-0123456789abcdef0
+```
+
+Utilize um token longo e aleatório.
+
+---
+
+# 6. Permissão da Lambda
+
+Abra:
+
+**Lambda -> Configuration -> Permissions**
+
+Clique no **Execution role**.
+
+Adicione uma Inline Policy:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "ec2:AuthorizeSecurityGroupIngress",
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+---
+
+# 7. Código da Lambda
+
+Substitua o código da função por:
+
+```python
+import boto3
+import json
+import os
+from botocore.exceptions import ClientError
+
+ec2 = boto3.client("ec2")
+
+SG_ID = os.environ["SG_ID"]
+TOKEN = os.environ["TOKEN"]
+
+
+def lambda_handler(event, context):
+    headers = {
+        k.lower(): v
+        for k, v in event.get("headers", {}).items()
+    }
+
+    if headers.get("authorization") != f"Bearer {TOKEN}":
+        return {
+            "statusCode": 401,
+            "body": "Unauthorized"
+        }
+
+    ip = event["requestContext"]["http"]["sourceIp"]
+
+    for port in (1080, 443):
+        try:
+            ec2.authorize_security_group_ingress(
+                GroupId=SG_ID,
+                IpPermissions=[
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": port,
+                        "ToPort": port,
+                        "IpRanges": [
+                            {
+                                "CidrIp": f"{ip}/32",
+                                "Description": "janja-auto"
+                            }
+                        ]
+                    }
+                ]
+            )
+        except ClientError as e:
+            if e.response["Error"]["Code"] != "InvalidPermission.Duplicate":
+                raise
+
+    return {
+        "statusCode": 200,
+        "body": json.dumps({
+            "authorized": True,
+            "ip": ip
+        })
+    }
+```
+
+Clique em **Deploy**.
+
+---
+
+# 8. Criar a Function URL
+
+Abra:
+
+**Lambda -> Configuration -> Function URL**
+
+Clique em **Create function URL**.
+
+Configure:
+
+```text
+Auth type: NONE
+```
+
+A autenticação será feita pelo Bearer Token configurado na própria Lambda.
+
+A URL será semelhante a:
+
+```text
+https://xxxxxxxx.lambda-url.us-east-1.on.aws/
+```
+
+---
+
+# 9. Configurar os Scripts
+
+# Windows
+
+Edite:
+
+```text
+discord.bat
+```
+
+Configure:
 
 ```batch
-@echo off
-setlocal
-
-:: ==========================================
-:: CONFIGURAÇÃO: Insira o IP da sua AWS aqui
-:: ==========================================
 set "PROXY_HOST=<SEU_IP_DO_SERVIDOR>"
 set "PROXY_PORT=1080"
-:: ==========================================
-
-taskkill /F /IM Discord.exe >nul 2>&1
-timeout /t 1 >nul
-
-for /f "delims=" %%D in ('dir /b /ad /o-n "%LocalAppData%\Discord\app-*" 2^>nul') do (
-    start "" "%LocalAppData%\Discord\%%D\Discord.exe" --proxy-server="socks5://%PROXY_HOST%:%PROXY_PORT%" "--proxy-bypass-list=<-loopback>"
-    goto :done
-)
-
-:done
-exit
+set "AUTH_URL=<SUA_LAMBDA_FUNCTION_URL>"
+set "AUTH_TOKEN=<SEU_TOKEN>"
 ```
 
-> **Nota:** O inicializador padrão `Update.exe` descarta argumentos de linha de comando. O script busca o diretório da versão instalada mais recente e executa o `Discord.exe` diretamente com os parâmetros de rede necessários.
+Depois execute:
+
+```text
+discord.bat
+```
+
+O script:
+
+1. Autoriza seu IP atual na AWS.
+2. Fecha o Discord.
+3. Inicia o Discord utilizando o proxy.
 
 ---
 
-### macOS (`discord_macos.sh`)
+# macOS
 
-Edite o `discord_macos.sh` e substitua o IP:
+Edite:
 
-```bash
-#!/usr/bin/env bash
-
-# ==========================================
-# CONFIGURAÇÃO: Insira o IP da sua AWS aqui
-# ==========================================
-PROXY_HOST="<SEU_IP_DO_SERVIDOR>"
-PROXY_PORT="1080"
-# ==========================================
-
-pkill -f "Discord" 2>/dev/null
-sleep 1
-
-PROXY_ARGS="--proxy-server=socks5://${PROXY_HOST}:${PROXY_PORT} --proxy-bypass-list=<-loopback>"
-
-if ! open -a "Discord" --args $PROXY_ARGS; then
-    echo "[ERRO] Discord não encontrado na pasta /Applications."
-    exit 1
-fi
+```text
+discord_macos.sh
 ```
 
-Dê permissão de execução no terminal:
+Configure:
+
+```bash
+PROXY_HOST="<SEU_IP_DO_SERVIDOR>"
+PROXY_PORT="1080"
+AUTH_URL="<SUA_LAMBDA_FUNCTION_URL>"
+AUTH_TOKEN="<SEU_TOKEN>"
+```
+
+Dê permissão:
+
 ```bash
 chmod +x discord_macos.sh
 ```
 
----
-
-### Linux (`discord_linux.sh`)
-
-Edite o `discord_linux.sh` e substitua o IP:
+Execute:
 
 ```bash
-#!/usr/bin/env bash
-
-# ==========================================
-# CONFIGURAÇÃO: Insira o IP da sua AWS aqui
-# ==========================================
-PROXY_HOST="<SEU_IP_DO_SERVIDOR>"
-PROXY_PORT="1080"
-# ==========================================
-
-killall -9 discord 2>/dev/null
-pkill -f "Discord" 2>/dev/null
-sleep 1
-
-PROXY_ARGS="--proxy-server=socks5://${PROXY_HOST}:${PROXY_PORT} --proxy-bypass-list=<-loopback>"
-
-if command -v discord &> /dev/null; then
-    discord $PROXY_ARGS &
-    exit 0
-fi
-
-if command -v flatpak &> /dev/null; then
-    if flatpak list --columns=application 2>/dev/null | grep -Fxq "com.discordapp.Discord"; then
-        flatpak run com.discordapp.Discord $PROXY_ARGS &
-        exit 0
-    fi
-fi
-
-echo "[ERRO] Discord não encontrado no sistema."
-exit 1
+./discord_macos.sh
 ```
 
-O script tenta o comando `discord` (pacman, yay, apt e outros gerenciadores de pacotes). Se não estiver no `PATH`, inicia o Discord via Flatpak.
+---
 
-Dê permissão de execução:
+# Linux
+
+Edite:
+
+```text
+discord_linux.sh
+```
+
+Configure:
+
+```bash
+PROXY_HOST="<SEU_IP_DO_SERVIDOR>"
+PROXY_PORT="1080"
+AUTH_URL="<SUA_LAMBDA_FUNCTION_URL>"
+AUTH_TOKEN="<SEU_TOKEN>"
+```
+
+Dê permissão:
+
 ```bash
 chmod +x discord_linux.sh
 ```
+
+Execute:
+
+```bash
+./discord_linux.sh
+```
+
+O script tenta primeiro encontrar o Discord instalado diretamente no sistema.
+
+Se não encontrar, tenta iniciar:
+
+```text
+com.discordapp.Discord
+```
+
+via Flatpak.
+
+---
