@@ -86,13 +86,43 @@ As portas do proxy serão liberadas automaticamente somente para os IPs autoriza
 
 # 2. Conectar na EC2
 
-No Windows PowerShell:
+## Windows
+
+Antes de conectar, o Windows pode considerar o arquivo `.pem` acessível por outros usuários e o OpenSSH irá recusá-lo.
+
+No PowerShell, navegue até a pasta onde está a chave e execute:
+
+```powershell
+icacls .\key.pem /inheritance:r
+
+$me = whoami
+icacls .\key.pem /grant:r "${me}:(R)"
+```
+
+Confirme as permissões:
+
+```powershell
+icacls .\key.pem
+```
+
+Agora conecte:
 
 ```powershell
 ssh -i .\key.pem ec2-user@<IP_PUBLICO_DA_EC2>
 ```
 
-No macOS/Linux:
+> [!NOTE]
+> Se sua conexão com a internet mudar e seu IP público mudar, atualize a regra `SSH / TCP 22 / My IP` no Security Group da EC2 antes de tentar conectar novamente.
+
+## macOS/Linux
+
+Proteja a chave:
+
+```bash
+chmod 600 ./key.pem
+```
+
+Conecte:
 
 ```bash
 ssh -i ./key.pem ec2-user@<IP_PUBLICO_DA_EC2>
